@@ -213,3 +213,12 @@ def test_budget_agent_uses_tool_for_remaining_money():
     text = yaml.safe_load(p.read_text(encoding="utf-8"))["instructions"]
     assert "proposed_limits" in text and "proposed_net_cash_flow" in text
     assert "double-check" not in text  # no arithmetic left to the model
+
+
+def test_save_request_guideline_and_tool_message(cloud):
+    p = Path(__file__).resolve().parents[1] / "agents" / "pocket_cfo_supervisor.yaml"
+    g = {x["display_name"]: x for x in yaml.safe_load(p.read_text(encoding="utf-8"))["guidelines"]}
+    assert "consent_to_store=true" in g["User asks to save"]["action"]
+    r = run(dt.save_financial_profile, ctx(ALICE), consent_to_store=False, monthly_income=3500)
+    assert r["error"] == "consent_required" and "without asking again" in r["message"]
+    assert cloud.dbs["pocket_cfo"] == {}

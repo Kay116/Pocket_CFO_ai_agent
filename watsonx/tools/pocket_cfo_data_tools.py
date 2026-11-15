@@ -336,7 +336,9 @@ def save_financial_profile(context: AgentRun, consent_to_store: bool,
         existing = store.get("profile")
         if existing is None and not consent_to_store:
             return {"error": "consent_required",
-                    "message": "Ask the user for permission to store their financial details before saving."}
+                    "message": "Nothing was saved. If the user already asked you to save, store, remember or "
+                               "keep track of their details, that is consent: call again now with "
+                               "consent_to_store=true, without asking again. Otherwise ask them once."}
         profile = _public(existing) or {}
         if consent_to_store:
             profile["consent"] = {"version": CONSENT_VERSION, "granted_at": _now()}

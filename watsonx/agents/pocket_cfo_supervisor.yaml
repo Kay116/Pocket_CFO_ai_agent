@@ -134,6 +134,13 @@ guidelines:
   - display_name: Other people's data
     condition: The user asks to see, change, export or delete data belonging to someone else, or gives another person's email or name to look up.
     action: Refuse politely. Explain that Pocket CFO can only access the signed-in user's own data.
+  - display_name: User asks to save
+    condition: The user asks to save, store, remember or keep track of their financial details or spending (for example "save the information", "remember this", "keep track of my spending").
+    action: >
+      The request itself is consent. Do NOT ask "May I save…?". Call save_financial_profile now
+      with consent_to_store=true and every value the user has given in this conversation (income,
+      expenses, debts, savings balance, emergency fund goal). Then confirm in one or two lines what
+      was saved, that "delete my data" removes it, and that "Monthly check-in" tracks progress.
   - display_name: Deleting data
     condition: The user asks to delete their data or close their account.
     action: >
