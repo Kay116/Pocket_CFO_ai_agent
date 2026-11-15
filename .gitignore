@@ -1,0 +1,22 @@
+# secrets
+.env
+.env.*
+!.env.example
+*.pem
+*apikey*
+credentials*.json
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+*.db
+
+# node
+node_modules/
+dist/
+
+# agent backups
+watsonx/backups/
