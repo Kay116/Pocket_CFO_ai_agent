@@ -2,6 +2,7 @@
 
 Used by: Debt Management Agent.
 """
+import math
 from typing import List
 
 from ibm_watsonx_orchestrate.agent_builder.tools import tool
@@ -77,6 +78,11 @@ def _simulate(debts: List[DebtInput], payment: float, strategy: str, rollover: b
             "payoff_order": [{"name": n, "paid_off_month": m} for n, m in sorted(paid_off.items(), key=lambda kv: kv[1])]}
 
 
+def _all_finite(*values) -> bool:
+    """Reject NaN / infinity, which would otherwise flow through the math silently."""
+    return all(v is None or (isinstance(v, (int, float)) and math.isfinite(v)) for v in values)
+
+
 @tool(name="simulate_debt_payoff")
 def simulate_debt_payoff(debts: List[DebtInput], monthly_payment: float) -> dict:
     """Simulate paying off debts month by month and compare avalanche, snowball and minimum-only.
@@ -99,6 +105,8 @@ def simulate_debt_payoff(debts: List[DebtInput], monthly_payment: float) -> dict
         debts = _unique_names(_as_models(debts, DebtInput))
     except Exception:
         return {"error": "Each debt needs a name, balance, apr and minimum_payment."}
+    if not _all_finite(*([x for d in debts for x in (d.balance, d.apr, d.minimum_payment)] + [monthly_payment])):
+        return {"error": "All amounts must be real numbers (no NaN or infinity)."}
     if not debts:
         return {"error": "No debts provided."}
     for d in debts:

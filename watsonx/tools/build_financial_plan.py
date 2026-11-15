@@ -7,6 +7,7 @@ debt payment rolling into savings, milestones) so the agents only have to explai
 
 Used by: Pocket CFO Supervisor (and its numbers are passed to the specialists / Coach).
 """
+import math
 import re
 from typing import Dict, List, Optional
 
@@ -15,6 +16,8 @@ from pydantic import BaseModel, Field
 
 HIGH_INTEREST_APR = 8.0
 MAX_MONTHS = 600
+
+
 # --- category classification (keep identical in build_financial_plan.py; a test checks this) ---
 # (group, keywords, fixed, essential, reference ceiling as % of income). The first group with a
 # matching word wins, so the order matters ("Car insurance" -> insurance, "Food delivery" -> dining).
@@ -146,6 +149,11 @@ def _simulate(debts: List[DebtInput], payment: float, rollover: bool = True) -> 
             "payoff_order": [{"name": n, "paid_off_month": m} for n, m in sorted(paid.items(), key=lambda kv: kv[1])]}
 
 
+def _all_finite(*values) -> bool:
+    """Reject NaN / infinity, which would otherwise flow through the math silently."""
+    return all(v is None or (isinstance(v, (int, float)) and math.isfinite(v)) for v in values)
+
+
 @tool(name="build_financial_plan")
 def build_financial_plan(monthly_income: float, expenses: Dict[str, float], savings_balance: float,
                          debts: Optional[List[DebtInput]] = None,
@@ -165,7 +173,9 @@ def build_financial_plan(monthly_income: float, expenses: Dict[str, float], savi
         expenses (Dict[str, float]): Monthly living expenses by category, e.g. {"Rent": 1200}. Exclude debt payments.
         savings_balance (float): Current emergency savings in dollars.
         debts (List[DebtInput], optional): Every debt with balance, APR and minimum payment. Empty if none.
-        emergency_fund_target (float, optional): The user's emergency fund goal in dollars.
+        emergency_fund_target (float, optional): The user's emergency fund goal in dollars. Ask for it.
+            Without it there is no savings timeline and the split assumes the fund is not complete;
+            the result then suggests 3- and 6-month essentials targets the user can choose from.
         confirm_expenses_exclude_debt_payments (bool): Set true ONLY after the user confirmed that the
             categories flagged by a "possible_double_count" error are not payments on the listed debts.
 
@@ -181,6 +191,8 @@ def build_financial_plan(monthly_income: float, expenses: Dict[str, float], savi
         debts = _unique_names(_as_models(debts, DebtInput))
     except Exception:
         return {"error": "Each debt needs a name, balance, apr and minimum_payment."}
+    if not _all_finite(*([x for d in debts for x in (d.balance, d.apr, d.minimum_payment)] + [monthly_income, savings_balance, emergency_fund_target] + list((expenses or {}).values()))):
+        return {"error": "All amounts must be real numbers (no NaN or infinity)."}
     if monthly_income is None or monthly_income < 0:
         return {"error": "monthly_income is required and cannot be negative."}
     if not expenses or any(v is None or v < 0 for v in expenses.values()):
@@ -274,6 +286,13 @@ def build_financial_plan(monthly_income: float, expenses: Dict[str, float], savi
                    "goal_reached_month": goal_month,
                    "three_month_essentials_target": round(essential * 3, 2),
                    "six_month_essentials_target": round(essential * 6, 2)}
+
+    else:
+        # No goal given: do not invent one. Suggest essentials-based targets for the user to choose.
+        savings = {"current_savings": round(savings_balance, 2), "goal": None, "goal_missing": True,
+                   "monthly_contribution_now": alloc["savings_contribution"],
+                   "suggested_goal_three_months_essentials": round(essential * 3, 2) if essential else None,
+                   "suggested_goal_six_months_essentials": round(essential * 6, 2) if essential else None}
 
     milestones = []
     if debt and debt.get("months_to_debt_free"):

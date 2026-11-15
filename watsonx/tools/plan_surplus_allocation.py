@@ -4,6 +4,7 @@ This is the Supervisor's conflict-resolution policy between the Debt Management
 and Savings agents, implemented deterministically so the split always adds up.
 Used by: Pocket CFO Supervisor, Financial Coach Agent.
 """
+import math
 from typing import List, Optional
 
 from ibm_watsonx_orchestrate.agent_builder.tools import tool
@@ -22,6 +23,11 @@ class DebtInput(BaseModel):
 def _as_models(items, model):
     """watsonx passes nested objects as plain dicts at runtime; accept both."""
     return [i if isinstance(i, model) else model.model_validate(i) for i in (items or [])]
+
+
+def _all_finite(*values) -> bool:
+    """Reject NaN / infinity, which would otherwise flow through the math silently."""
+    return all(v is None or (isinstance(v, (int, float)) and math.isfinite(v)) for v in values)
 
 
 @tool(name="plan_surplus_allocation")
@@ -49,9 +55,11 @@ def plan_surplus_allocation(net_cash_flow: float, debts: List[DebtInput], saving
         debts = _as_models(debts, DebtInput)
     except Exception:
         return {"error": "Each debt needs a name, balance, apr and minimum_payment."}
+    if not _all_finite(*([x for d in debts for x in (d.balance, d.apr, d.minimum_payment)] + [net_cash_flow, savings_balance, emergency_fund_target])):
+        return {"error": "All amounts must be real numbers (no NaN or infinity)."}
     for d in debts:
-        if d.balance < 0 or d.apr < 0 or d.minimum_payment < 0:
-            return {"error": f"Debt '{d.name}' has a negative value."}
+        if d.balance < 0 or d.apr < 0 or d.apr > 100 or d.minimum_payment < 0:
+            return {"error": f"Debt '{d.name}' has an invalid balance, APR or minimum payment."}
     if savings_balance is None or savings_balance < 0:
         return {"error": "savings_balance is required and cannot be negative."}
 

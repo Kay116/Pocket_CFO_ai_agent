@@ -2,9 +2,15 @@
 
 Used by: Investment Education Agent.
 """
+import math
 from typing import List, Optional
 
 from ibm_watsonx_orchestrate.agent_builder.tools import tool
+
+
+def _all_finite(*values) -> bool:
+    """Reject NaN / infinity, which would otherwise flow through the math silently."""
+    return all(v is None or (isinstance(v, (int, float)) and math.isfinite(v)) for v in values)
 
 
 @tool(name="compound_interest_scenarios")
@@ -26,6 +32,8 @@ def compound_interest_scenarios(monthly_contribution: float, starting_amount: fl
         dict: for each rate and horizon, the future value, total contributed and growth,
         plus a disclaimer.
     """
+    if not _all_finite(*([monthly_contribution, starting_amount] + list(annual_rates_pct or []) + list(years or []))):
+        return {"error": "All amounts must be real numbers (no NaN or infinity)."}
     if monthly_contribution is None or monthly_contribution < 0 or starting_amount < 0:
         return {"error": "Amounts must be non-negative."}
     rates = annual_rates_pct or [4.0, 6.0, 8.0]

@@ -53,7 +53,8 @@ def classify_category(name: str) -> Optional[str]:
 
 @tool(name="calculate_cash_flow")
 def calculate_cash_flow(monthly_income: float, expenses: Dict[str, float],
-                        fixed_categories: Optional[list[str]] = None) -> dict:
+                        fixed_categories: Optional[list[str]] = None,
+                        proposed_limits: Optional[Dict[str, float]] = None) -> dict:
     """Calculate monthly cash flow, spending breakdown, and fixed vs. variable expenses.
 
     Always call this tool instead of doing the arithmetic yourself. Only pass values
@@ -64,13 +65,18 @@ def calculate_cash_flow(monthly_income: float, expenses: Dict[str, float],
         monthly_income (float): The user's monthly take-home income in dollars.
         expenses (Dict[str, float]): Monthly expenses keyed by category name, e.g. {"Rent": 1200, "Groceries": 350}.
         fixed_categories (list[str], optional): Category names to treat as fixed costs, overriding the defaults.
+        proposed_limits (Dict[str, float], optional): New monthly limits for the categories you want to
+            change, e.g. {"Groceries": 250}. Keys must be existing expense names. The result's
+            proposed_budget then gives each change, the total monthly savings and the money left after
+            the changes. Use those numbers; never add up the savings or the remaining money yourself.
 
     Returns:
         dict: totals (income, expenses, net cash flow, savings rate, fixed, variable, essential,
         discretionary), a per-category breakdown sorted by amount with its group, categories above
         common reference ranges, unrecognized_categories (ask the user whether these are essential),
         and debt_payment_categories (debt payments; if you later pass debts to another tool, these
-        must not also be in expenses). Contains an "error" key if inputs are invalid.
+        must not also be in expenses), and proposed_budget when proposed_limits is given.
+        Contains an "error" key if inputs are invalid.
     """
     if monthly_income is None or not monthly_income == monthly_income or monthly_income < 0:
         return {"error": "monthly_income is required and cannot be negative."}
@@ -79,6 +85,15 @@ def calculate_cash_flow(monthly_income: float, expenses: Dict[str, float],
     for cat, amt in expenses.items():
         if amt is None or not amt == amt or amt < 0:
             return {"error": f"Expense '{cat}' must be a non-negative number."}
+
+    if proposed_limits:
+        unknown = [c for c in proposed_limits if c not in expenses]
+        if unknown:
+            return {"error": f"proposed_limits has categories that are not in expenses: {', '.join(unknown)}. "
+                             f"Use the exact expense names: {', '.join(expenses)}."}
+        for cat, amt in proposed_limits.items():
+            if amt is None or not amt == amt or amt < 0 or amt == float("inf"):
+                return {"error": f"Proposed limit for '{cat}' must be a non-negative number."}
 
     groups = {cat: classify_category(cat) for cat in expenses}
     override = {c.strip().lower() for c in fixed_categories} if fixed_categories else None
@@ -112,6 +127,19 @@ def calculate_cash_flow(monthly_income: float, expenses: Dict[str, float],
                 flags.append({"category": " + ".join(c for c, _ in items), "group": g,
                               "share_of_income_pct": share, "reference_pct": _RULES[g][2]})
 
+    proposed = None
+    if proposed_limits:
+        changes = [{"category": c, "current": round(expenses[c], 2), "proposed": round(v, 2),
+                    "difference": round(v - expenses[c], 2)} for c, v in proposed_limits.items()]
+        new_total = total - sum(expenses[c] for c in proposed_limits) + sum(proposed_limits.values())
+        new_net = monthly_income - new_total
+        proposed = {"changes": changes,
+                    "total_monthly_savings": round(total - new_total, 2),
+                    "proposed_total_expenses": round(new_total, 2),
+                    "proposed_net_cash_flow": round(new_net, 2),
+                    "current_net_cash_flow": round(net, 2),
+                    "proposed_status": "surplus" if new_net > 0 else ("break_even" if new_net == 0 else "deficit")}
+
     return {
         "monthly_income": round(monthly_income, 2),
         "total_expenses": round(total, 2),
@@ -126,4 +154,5 @@ def calculate_cash_flow(monthly_income: float, expenses: Dict[str, float],
         "above_reference_range": flags,
         "unrecognized_categories": [c for c in expenses if groups[c] is None],
         "debt_payment_categories": [c for c in expenses if groups[c] == "debt"],
+        "proposed_budget": proposed,
     }

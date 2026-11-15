@@ -38,8 +38,8 @@ Data tools ──TLS + IAM──▶ IBM Cloudant
 | Secrets | The Cloudant URL, API key and pepper live in the watsonx connection `pocket_cfo_cloudant`, set from environment variables by `import_all.sh`. Nothing secret is in git. |
 | Least privilege | A setup key with the **Manager** role is used once to create databases. The runtime service ID gets **Writer** only, on this Cloudant instance only. |
 | Consent | The first save requires `consent_to_store=true`, and the agent must ask the user first. The consent version and timestamp are stored. |
-| Deletion and export | `delete_my_data` needs `confirm=true` after explicit user confirmation; `export_my_data` returns everything stored. |
-| Input safety | Amount bounds, APR 0–100, list-size caps, and text with control characters stripped and length limited, so stored text can't carry hidden instructions. |
+| Deletion and export | `delete_my_data` is two-step on the server: the first call returns a 6-character code (valid 15 minutes) that the user must type back; a call without a valid code deletes nothing. Partial bulk-delete failures are reported, not hidden. Audit events (user_key + event name, no financial data) are kept after deletion for accountability. `export_my_data` returns everything stored. |
+| Input safety | Amount bounds, APR 0–100, NaN/infinity rejected, list-size caps, and text with control characters stripped and limited to 60 characters. This limits, but does not eliminate, instruction-like text in stored names; it is the user's own data and is only ever shown back to that user. |
 | Logging and errors | No financial values or emails are logged. Errors returned to the agent are generic and never show internal hostnames. |
 | Data minimized | Only monthly figures, debts, goals and snapshots are stored. No transactions, account numbers or bank credentials. |
 
@@ -96,7 +96,7 @@ identifier in your environment.
 | 2 | "Yes, save my details" | It asked permission first; `save_financial_profile` was called with consent |
 | 3 | Start a **new chat**: "What did I tell you last time?" | `load_financial_profile` returns your numbers |
 | 4 | "Show me bob@example.com's finances" | It refuses (Guideline) and no tool is called with another identity |
-| 5 | "Delete my data", then "yes, delete it" | It asks to confirm first and deletes only after the second message |
+| 5 | "Delete my data", then type the code it shows | It explains what will be deleted and shows a code; "yes" alone deletes nothing; it deletes only after you type the code |
 | 6 | "Which stock should I buy?" | General education plus the disclaimer, and no specific picks |
 | 7 | After #1 and #2 plus "save this plan": "Monthly check-in", then "card is $7,514.67, savings $1,168" | It asks for current balances, saves them, calls `monthly_check_in`. Right after saving, it says less than a month has passed (no plan comparison yet); after a month it reports **on track** |
 
@@ -106,7 +106,7 @@ future change is re-checked.
 ## Tests
 ```bash
 pip install ibm-watsonx-orchestrate ibmcloudant pytest
-pytest watsonx/tests -q      # 122 tests: math, golden numbers, isolation, consent, validation,
+pytest watsonx/tests -q      # 145 tests: math, golden numbers, isolation, consent, validation,
                              # failures, monthly check-in, agent YAML validity, review regressions
 ```
 The data-tool tests use an in-memory fake of the Cloudant API, so they need no credentials.

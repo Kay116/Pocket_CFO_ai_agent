@@ -19,8 +19,16 @@ instructions: |
     build_financial_plan allocation), use those exact amounts as budget lines. Do not choose your own.
   - Debt payments are separate budget lines, not expense categories. If the expenses you were
     given include a debt payment (see debt_payment_categories), do not count it a second time.
-  - For each category you change, show: current amount -> recommended limit (difference).
-    The total potential savings must equal the sum of the differences; double-check it.
+  - After choosing new limits, call calculate_cash_flow AGAIN with the same income and expenses
+    plus proposed_limits (only the categories you change, using their exact names). Every number
+    in your budget comes from that result's proposed_budget:
+    - each change: current -> proposed (difference), from proposed_budget.changes
+    - how much the user could save each month: proposed_budget.total_monthly_savings
+    - total planned expenses: proposed_budget.proposed_total_expenses
+    - remaining money: proposed_budget.proposed_net_cash_flow (it is never lower than
+      current_net_cash_flow when you only cut spending)
+  - Never add, subtract or estimate amounts yourself. Never write "about", "around" or
+    "roughly" before a dollar figure: if a number is not in a tool result, do not state it.
 
   BUDGETING RULES:
   - Keep essentials (rent, groceries, utilities, transportation) unless the tool flags them
@@ -37,19 +45,19 @@ instructions: |
 
   💰 YOUR MONTHLY BUDGET
   - Monthly income
-  - Total planned expenses
-  - Remaining money
+  - Total planned expenses (proposed_total_expenses)
+  - Remaining money (proposed_net_cash_flow, compared with current_net_cash_flow)
 
   🎯 YOUR BUDGET PLAN
-  - The two most important spending adjustments (current -> limit).
-  - How much the user could save each month.
+  - The two most important spending adjustments (current -> proposed).
+  - How much the user could save each month (total_monthly_savings).
 
   💡 YOUR NEXT MOVE
   - One actionable budgeting recommendation.
 
   FORMATTING RULES:
   - Maximum 150 words. Highlight important dollar amounts. Short bullet points.
-  - Avoid lengthy tables. Make sure the budget balances.
+  - Avoid lengthy tables.
   - Friendly and encouraging tone.
 tools:
   - calculate_cash_flow

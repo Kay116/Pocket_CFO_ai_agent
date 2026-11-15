@@ -2,11 +2,17 @@
 
 Used by: Savings Agent.
 """
+import math
 from typing import Optional
 
 from ibm_watsonx_orchestrate.agent_builder.tools import tool
 
 MAX_MONTHS = 600
+
+
+def _all_finite(*values) -> bool:
+    """Reject NaN / infinity, which would otherwise flow through the math silently."""
+    return all(v is None or (isinstance(v, (int, float)) and math.isfinite(v)) for v in values)
 
 
 @tool(name="savings_goal_timeline")
@@ -33,6 +39,8 @@ def savings_goal_timeline(current_savings: float, goal_amount: float, monthly_co
         dict: months to goal (or null if unreachable), remaining amount, a short balance path,
         and suggested emergency fund targets when essential expenses are given.
     """
+    if not _all_finite(*([current_savings, goal_amount, monthly_contribution, essential_monthly_expenses, annual_interest_rate, extra_contribution_amount])):
+        return {"error": "All amounts must be real numbers (no NaN or infinity)."}
     if current_savings is None or goal_amount is None or monthly_contribution is None:
         return {"error": "current_savings, goal_amount and monthly_contribution are required."}
     if min(current_savings, goal_amount, monthly_contribution, extra_contribution_amount) < 0:

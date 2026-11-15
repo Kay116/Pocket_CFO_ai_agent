@@ -153,7 +153,8 @@ def test_users_are_isolated(cloud):
     assert run(dt.get_progress_history, ctx(BOB))["count"] == 0
     bob_export = run(dt.export_my_data, ctx(BOB))
     assert bob_export["profile"] is None and bob_export["snapshots"] == []
-    assert run(dt.delete_my_data, ctx(BOB), confirm=True)["deleted"] == 0
+    bob_code = run(dt.delete_my_data, ctx(BOB))["confirmation_code"]
+    assert run(dt.delete_my_data, ctx(BOB), confirmation_code=bob_code)["deleted"] == 0
     assert run(dt.load_financial_profile, ctx(ALICE))["found"] is True
 
 
@@ -217,7 +218,7 @@ def test_delete_requires_confirmation(cloud):
     r = run(dt.delete_my_data, ctx(ALICE))
     assert r["confirmation_required"] and run(dt.load_financial_profile, ctx(ALICE))["found"]
     run(dt.save_analysis_snapshot, ctx(ALICE), plan_summary="x")
-    assert run(dt.delete_my_data, ctx(ALICE), confirm=True)["deleted"] == 2
+    assert run(dt.delete_my_data, ctx(ALICE), confirmation_code=r["confirmation_code"].lower())["deleted"] == 2
     assert run(dt.load_financial_profile, ctx(ALICE))["found"] is False
     events = [d["event"] for d in cloud.dbs["pocket_cfo_audit"].values()]
     assert "data_deleted" in events

@@ -27,7 +27,7 @@ import hashlib
 import hmac
 import re
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from ibm_watsonx_orchestrate.agent_builder.connections import ConnectionType
@@ -43,6 +43,8 @@ HIGH_INTEREST_APR = 8.0
 MAX_AMOUNT = 10_000_000
 MAX_EXPENSES, MAX_DEBTS, MAX_GOALS, MAX_SNAPSHOTS_RETURNED = 30, 20, 10, 24
 _CTRL = re.compile(r"[\x00-\x1f\x7f]")
+DELETE_CODE_MINUTES = 15
+_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O or 1/I mix-ups
 
 
 # --------------------------------------------------------------------------- input models
@@ -131,13 +133,19 @@ class _UserStore:
         ).get_result()
         return [r["doc"] for r in res.get("rows", []) if r.get("doc")]
 
-    def delete_all(self) -> int:
+    def delete_all(self) -> tuple:
+        """Delete every document in the user's partition. Returns (deleted, failed) counts of
+        profile/snapshot documents, checking Cloudant's per-document results."""
         from ibmcloudant.cloudant_v1 import BulkDocs, Document
         docs = self.list("")
-        if docs:
-            self.client.post_bulk_docs(db=self.db, bulk_docs=BulkDocs(
-                docs=[Document(id=d["_id"], rev=d["_rev"], deleted=True) for d in docs]))
-        return len(docs)
+        if not docs:
+            return 0, 0
+        res = self.client.post_bulk_docs(db=self.db, bulk_docs=BulkDocs(
+            docs=[Document(id=d["_id"], rev=d["_rev"], deleted=True) for d in docs])).get_result() or []
+        failed_ids = {r.get("id") for r in res if isinstance(r, dict) and r.get("error")}
+        user_docs = [d for d in docs if d.get("type") != "delete_request"]
+        failed = sum(d["_id"] in failed_ids for d in user_docs)
+        return len(user_docs) - failed, failed
 
     def audit(self, event: str) -> None:
         """Best-effort audit record: user_key + event name only, no financial data."""
@@ -299,13 +307,15 @@ def save_financial_profile(context: AgentRun, consent_to_store: bool,
     """Save or update the signed-in user's financial profile so it is remembered next time.
 
     Only fields that are passed are changed; omitted fields keep their saved values. Passing a
-    list (expenses, debts, savings_goals) replaces that whole list. Before the FIRST save you
-    must ask the user "May I save your financial details so I can remember them next time?"
-    and set consent_to_store to true only if they clearly agree. Never ask for or pass the
-    user's email or identity; the platform provides it.
+    list (expenses, debts, savings_goals) replaces that whole list, so always pass every debt.
+    savings_balance is the emergency fund balance; the emergency fund goal's current_amount is
+    kept equal to it automatically. The FIRST save needs the user's consent: either the user
+    asked you to save or remember their details, or you asked "May I save your financial details
+    so I can remember them next time?" and they clearly agreed. Do not ask again if they already
+    asked you to save. Never ask for or pass the user's email or identity; the platform provides it.
 
     Args:
-        consent_to_store (bool): True only if the user explicitly agreed to have their data stored.
+        consent_to_store (bool): True only if the user asked to save their data or explicitly agreed to it.
         monthly_income (float, optional): Monthly take-home income in dollars.
         savings_balance (float, optional): Current savings balance in dollars.
         expenses (Dict[str, float], optional): Monthly expenses by category, e.g. {"Rent": 1200}.
@@ -362,6 +372,15 @@ def save_financial_profile(context: AgentRun, consent_to_store: bool,
                                          "target_amount": _money(g.target_amount, "target_amount"),
                                          "current_amount": _money(g.current_amount, "current_amount"),
                                          "is_emergency_fund": bool(g.is_emergency_fund)} for g in savings_goals]
+            if sum(g["is_emergency_fund"] for g in profile["savings_goals"]) > 1:
+                raise ToolInputError("Only one savings goal can be the emergency fund.")
+        # savings_balance is the single source of truth for the emergency fund; the goal mirrors it.
+        ef = next((g for g in profile.get("savings_goals", []) if g.get("is_emergency_fund")), None)
+        if ef is not None:
+            if savings_balance is None and savings_goals is not None and profile.get("savings_balance") is None:
+                profile["savings_balance"] = ef["current_amount"]  # only the goal's amount was given
+            if profile.get("savings_balance") is not None:
+                ef["current_amount"] = profile["savings_balance"]
         profile["type"] = "profile"
         profile["updated_at"] = _now()
         store.put("profile", profile, rev=existing.get("_rev") if existing else None)
@@ -563,26 +582,46 @@ def export_my_data(context: AgentRun) -> dict:
 
 
 @tool(name="delete_my_data", permission=ToolPermission.READ_WRITE, expected_credentials=CREDS)
-def delete_my_data(context: AgentRun, confirm: bool = False) -> dict:
-    """Permanently delete everything Pocket CFO has stored for the signed-in user.
+def delete_my_data(context: AgentRun, confirmation_code: Optional[str] = None) -> dict:
+    """Permanently delete everything Pocket CFO has stored for the signed-in user. Two steps.
 
-    First tell the user exactly what will be deleted (profile and all progress snapshots) and
-    that it cannot be undone. Set confirm to true ONLY after the user explicitly confirms in
-    their latest message. Never delete on a guess.
+    Step 1: call WITHOUT confirmation_code. You get a short code. Tell the user exactly what will
+    be deleted (profile and all progress snapshots), that it cannot be undone, show the code, and
+    ask them to type it to confirm. Step 2: only when the user's own latest message contains the
+    code, call again with confirmation_code set to what the user typed. Never pass a code the
+    user did not type. Codes expire after 15 minutes.
 
     Args:
-        confirm (bool): True only after the user explicitly confirmed the permanent deletion.
+        confirmation_code (str, optional): The code exactly as the user typed it back.
 
     Returns:
-        dict: {"deleted": n} or a message asking for confirmation.
+        dict: step 1: {"confirmation_required": true, "confirmation_code": "..."}; step 2:
+        {"deleted": n} or an "error" (wrong or expired code, or a partial failure).
     """
-    if not confirm:
-        return {"deleted": 0, "confirmation_required": True,
-                "message": "Ask the user to confirm permanent deletion of their profile and all snapshots."}
     try:
         store = _UserStore(context)
-        count = store.delete_all()
+        if not confirmation_code:
+            code = "".join(secrets.choice(_CODE_ALPHABET) for _ in range(6))
+            req = store.get("delete-request")
+            store.put("delete-request", {"type": "delete_request", "code": code, "issued_at": _now()},
+                      rev=req.get("_rev") if req else None)
+            store.audit("delete_requested")
+            return {"deleted": 0, "confirmation_required": True, "confirmation_code": code,
+                    "expires_in_minutes": DELETE_CODE_MINUTES,
+                    "message": "Explain what will be permanently deleted, show this code, and ask the user "
+                               "to type it to confirm. Do not call delete_my_data again until they do."}
+        req = store.get("delete-request")
+        issued = datetime.fromisoformat(req["issued_at"]) if req else None
+        if (req is None or _utcnow() - issued > timedelta(minutes=DELETE_CODE_MINUTES)
+                or not hmac.compare_digest(str(confirmation_code).strip().upper(), req["code"])):
+            return {"deleted": 0, "error": "invalid_or_expired_code",
+                    "message": "The code is wrong or expired. Nothing was deleted. Start again without a code."}
+        deleted, failed = store.delete_all()
+        if failed:
+            store.audit("data_delete_partial")
+            return {"deleted": deleted, "failed": failed,
+                    "error": "Some data could not be deleted. Nothing more was changed; please try again."}
         store.audit("data_deleted")
-        return {"deleted": count}
+        return {"deleted": deleted}
     except Exception as exc:
         return _error(exc)
