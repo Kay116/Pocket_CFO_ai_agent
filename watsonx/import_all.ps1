@@ -1,7 +1,8 @@
 # Import Pocket CFO (connection, tools, agents) into the ACTIVE watsonx Orchestrate environment.
 # Windows PowerShell version of import_all.sh. Run from the folder that contains `watsonx`:
 #
-#   orchestrate env activate money-coach          # if the token expired
+#   orchestrate env activate <your-env-name>      # if the token expired (see: orchestrate env list)
+#   (or run .\watsonx\deploy_pocket_cfo.ps1 -EnvName <your-env-name>, which does all of this for you)
 #   $env:CLOUDANT_URL            = "https://<account>.cloudantnosqldb.appdomain.cloud"
 #   $env:CLOUDANT_RUNTIME_APIKEY = "<service ID key with Writer role>"
 #   $env:USER_KEY_PEPPER         = "<64-char pepper saved in your password manager>"
@@ -28,8 +29,8 @@ function Run($cmd) {
 
 $app = "pocket_cfo_cloudant"
 Write-Host "==> Connection $app (team credentials, draft + live)"
-orchestrate connections add -a $app 2>$null
-if ($LASTEXITCODE -ne 0) { Write-Host "   (connection already exists - updating credentials)" }
+orchestrate connections add -a $app *> $null   # *> hides the CLI's "already exists" [ERROR] line
+if ($LASTEXITCODE -ne 0) { Write-Host "   (connection already exists - updating its credentials; this is normal)" }
 foreach ($envName in "draft", "live") {
   Run "orchestrate connections configure -a $app --env $envName --type team --kind key_value"
   orchestrate connections set-credentials -a $app --env $envName `
@@ -41,7 +42,7 @@ foreach ($envName in "draft", "live") {
 }
 
 Write-Host "==> Calculation tools"
-foreach ($t in "build_financial_plan", "calculate_cash_flow", "plan_surplus_allocation", "simulate_debt_payoff", "savings_goal_timeline", "compound_interest_scenarios") {
+foreach ($t in "build_financial_plan", "summarize_statement", "calculate_cash_flow", "plan_surplus_allocation", "simulate_debt_payoff", "savings_goal_timeline", "compound_interest_scenarios") {
   Run "orchestrate tools import -k python -f tools/$t.py -r tools/requirements.txt"
 }
 

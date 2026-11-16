@@ -20,7 +20,7 @@ APP_ID=pocket_cfo_cloudant
 : "${USER_KEY_PEPPER:?set USER_KEY_PEPPER}"
 
 echo "==> Connection ${APP_ID} (team credentials, draft + live)"
-orchestrate connections add -a "$APP_ID" 2>/dev/null || echo "   (connection already exists)"
+orchestrate connections add -a "$APP_ID" >/dev/null 2>&1 || echo "   (connection already exists - updating its credentials; this is normal)"
 for ENV in draft live; do
   orchestrate connections configure -a "$APP_ID" --env "$ENV" --type team --kind key_value
   orchestrate connections set-credentials -a "$APP_ID" --env "$ENV" \
@@ -30,7 +30,7 @@ for ENV in draft live; do
 done
 
 echo "==> Calculation tools"
-for t in build_financial_plan calculate_cash_flow plan_surplus_allocation simulate_debt_payoff savings_goal_timeline compound_interest_scenarios; do
+for t in build_financial_plan summarize_statement calculate_cash_flow plan_surplus_allocation simulate_debt_payoff savings_goal_timeline compound_interest_scenarios; do
   orchestrate tools import -k python -f "tools/${t}.py" -r tools/requirements.txt
 done
 

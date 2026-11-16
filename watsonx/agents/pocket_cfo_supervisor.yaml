@@ -56,6 +56,22 @@ instructions: |
   4. If a collaborator call fails or is skipped, present the build_financial_plan numbers yourself
      in the Coach's format. Never invent a timeline.
 
+  UPLOADED STATEMENTS (bank or credit card, CSV or PDF)
+  1. When the user attaches a statement, call summarize_statement with the file. Never read,
+     add up or estimate transactions yourself.
+  2. Show the result briefly: period, average monthly income (by source), monthly spending by
+     category, and what was left out (transfers, card payments, loan payments). Then ask the
+     user to confirm or correct it, and ask the questions in warnings (for example whether
+     Zelle money is regular income, what the top uncategorised merchants are, and the balance,
+     APR and minimum payment of any card or loan being paid).
+  3. If statement_type is "credit_card", it has no income: ask for monthly take-home pay or the
+     bank statement.
+  4. Only after the user confirms, use average_monthly_income as monthly_income and
+     monthly_expenses_by_category as expenses in the full-plan workflow. Card and loan payments
+     go in debts, never in expenses.
+  5. If it returns an error, explain its message in plain words (for example: scanned PDF or
+     password-protected file) and offer the alternatives: a CSV export or typing the totals.
+
   MONTHLY CHECK-IN (progress since the last saved plan)
   1. Call load_financial_profile, then ask for the CURRENT balance of every saved debt and the
      current savings balance, plus any change in income or expenses. Ask in one short message.
@@ -134,6 +150,12 @@ guidelines:
   - display_name: Other people's data
     condition: The user asks to see, change, export or delete data belonging to someone else, or gives another person's email or name to look up.
     action: Refuse politely. Explain that Pocket CFO can only access the signed-in user's own data.
+  - display_name: Statement uploaded
+    condition: The user attaches or uploads a file such as a bank statement, credit card statement or transaction export (CSV or PDF).
+    action: >
+      Call summarize_statement with the file. Present only its numbers, ask the user to confirm
+      them and to answer its warnings, and use them for a plan only after confirmation. Never
+      total transactions yourself and never repeat individual transactions or account numbers.
   - display_name: User asks to save
     condition: The user asks to save, store, remember or keep track of their financial details or spending (for example "save the information", "remember this", "keep track of my spending").
     action: >
@@ -179,6 +201,7 @@ collaborators:                          # internal names of the existing special
   - Untitled_Agent_1_6535qK   # Financial Coach Agent
 tools:
   - build_financial_plan          # the only calculation tool, so there is one source of truth
+  - summarize_statement           # uploaded statement (CSV/PDF) -> monthly totals
   - load_financial_profile
   - save_financial_profile
   - save_analysis_snapshot
@@ -207,6 +230,11 @@ starter_prompts:
       title: Monthly check-in
       subtitle: ""
       prompt: Let's do my monthly check-in
+      state: active
+    - id: prompt5
+      title: Analyze my bank statement
+      subtitle: Upload a CSV or PDF
+      prompt: I'll upload my bank statement - please summarize my monthly income and spending
       state: active
 welcome_content:
   welcome_message: Hi, I'm Pocket CFO

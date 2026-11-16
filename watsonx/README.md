@@ -9,6 +9,7 @@ User ─ watsonx Orchestrate chat ──(platform identity: wxo_email_id)──�
                                                                       ▼
 Pocket CFO Supervisor  (coordination: parallel, 6 Guidelines)
  ├─ tools: build_financial_plan (its only calculation tool: one source of truth),
+ │         summarize_statement (uploaded CSV/PDF statement -> monthly totals),
  │         load/save_financial_profile, save_analysis_snapshot, monthly_check_in,
  │         export_my_data, delete_my_data
  ├─ Financial Analyst ── calculate_cash_flow
@@ -41,7 +42,7 @@ Data tools ──TLS + IAM──▶ IBM Cloudant
 | Deletion and export | `delete_my_data` is two-step on the server: the first call returns a 6-character code (valid 15 minutes) that the user must type back; a call without a valid code deletes nothing. Partial bulk-delete failures are reported, not hidden. Audit events (user_key + event name, no financial data) are kept after deletion for accountability. `export_my_data` returns everything stored. |
 | Input safety | Amount bounds, APR 0–100, NaN/infinity rejected, list-size caps, and text with control characters stripped and limited to 60 characters. This limits, but does not eliminate, instruction-like text in stored names; it is the user's own data and is only ever shown back to that user. |
 | Logging and errors | No financial values or emails are logged. Errors returned to the agent are generic and never show internal hostnames. |
-| Data minimized | Only monthly figures, debts, goals and snapshots are stored. No transactions, account numbers or bank credentials. |
+| Data minimized | Only monthly figures, debts, goals and snapshots are stored. No transactions, account numbers or bank credentials. Uploaded statements are summarised in memory by `summarize_statement` and discarded: only monthly totals and a short list of masked merchant names are returned, and nothing from the file is stored unless the user saves the confirmed totals. |
 
 **Cloudant-specific notes:**
 - Cloudant has no row-level security like PostgreSQL, so isolation is enforced by the tools, which derive the partition from the platform identity.
@@ -99,6 +100,7 @@ identifier in your environment.
 | 5 | "Delete my data", then type the code it shows | It explains what will be deleted and shows a code; "yes" alone deletes nothing; it deletes only after you type the code |
 | 6 | "Which stock should I buy?" | General education plus the disclaimer, and no specific picks |
 | 7 | After #1 and #2 plus "save this plan": "Monthly check-in", then "card is $7,514.67, savings $1,168" | It asks for current balances, saves them, calls `monthly_check_in`. Right after saving, it says less than a month has passed (no plan comparison yet); after a month it reports **on track** |
+| 8 | Attach a bank statement (CSV, or a text PDF from online banking) | `summarize_statement` is called; it shows monthly income by source and spending by category, lists what was left out (transfers, card/loan payments) and asks you to confirm before planning. A scanned PDF gets a clear "export a CSV instead" message |
 
 Then choose **Create version → Deploy**. Add these as test cases in the **Evaluate** tab so every
 future change is re-checked.
@@ -106,7 +108,7 @@ future change is re-checked.
 ## Tests
 ```bash
 pip install ibm-watsonx-orchestrate ibmcloudant pytest
-pytest watsonx/tests -q      # 145 tests: math, golden numbers, isolation, consent, validation,
+pytest watsonx/tests -q      # 181 tests: math, golden numbers, isolation, consent, validation,
                              # failures, monthly check-in, agent YAML validity, review regressions
 ```
 The data-tool tests use an in-memory fake of the Cloudant API, so they need no credentials.

@@ -20,3 +20,29 @@ dist/
 
 # agent backups
 watsonx/backups/
+
+# AI assistant / editor files (never commit)
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+.mcp.json
+.vscode/
+.idea/
+*.code-workspace
+
+# OS clutter
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# bank statements and exports used for testing the upload feature (personal data)
+*.pdf
+*.csv
+*.xlsx
+*.ofx
+*.qfx
+statements/
+
+# local scratch
+*.log
+*.tmp
