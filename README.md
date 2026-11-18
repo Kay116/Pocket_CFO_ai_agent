@@ -2,7 +2,7 @@
 
 # 💼 Pocket CFO
 
-**Your personal finance coach: seven AI agents, exact math, private memory.**
+**Your personal finance coach**
 
 Built on **IBM watsonx Orchestrate**. Python does every calculation, so the agents explain
 your numbers instead of guessing them.
