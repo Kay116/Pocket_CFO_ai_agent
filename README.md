@@ -3,6 +3,7 @@
 # 💼 Pocket CFO
 
 **Your personal finance coach**
+
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![IBM watsonx Orchestrate](https://img.shields.io/badge/IBM-watsonx%20Orchestrate-0F62FE?logo=ibm&logoColor=white)
 ![IBM Cloudant](https://img.shields.io/badge/IBM-Cloudant-0F62FE?logo=ibm&logoColor=white)
