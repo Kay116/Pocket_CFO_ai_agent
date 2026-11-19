@@ -3,12 +3,6 @@
 # 💼 Pocket CFO
 
 **Your personal finance coach**
-
-Pocket CFO is a team of **7 AI agents on IBM watsonx Orchestrate** that work together to build you a personal money plan.
-
-- 🧮 **Real math, not guesses.** All calculations (cash flow, debt payoff, savings timelines) run in tested Python tools. The agents share the same results and explain them, so the AI never makes up numbers.
-- 🔐 **Private memory.** Your financial profile is saved in **IBM Cloudant**. It's linked to your watsonx Orchestrate sign-in, but your email is never stored. Each user gets a separate, encrypted-key partition, so nobody can see anyone else's data.
-
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![IBM watsonx Orchestrate](https://img.shields.io/badge/IBM-watsonx%20Orchestrate-0F62FE?logo=ibm&logoColor=white)
 ![IBM Cloudant](https://img.shields.io/badge/IBM-Cloudant-0F62FE?logo=ibm&logoColor=white)
@@ -17,6 +11,13 @@ Pocket CFO is a team of **7 AI agents on IBM watsonx Orchestrate** that work tog
 [What it does](#-what-it-does) · [How it works](#-how-it-works) · [Example](#-example) · [Quick start](#-quick-start) · [Privacy](#-privacy--security) · [Technical docs](watsonx/README.md)
 
 </div>
+
+
+Pocket CFO is a team of **7 AI agents on IBM watsonx Orchestrate** that work together to build you a personal money plan.
+
+- 🧮 **Real math, not guesses.** All calculations (cash flow, debt payoff, savings timelines) run in tested Python tools. The agents share the same results and explain them, so the AI never makes up numbers.
+- 🔐 **Private memory.** Your financial profile is saved in **IBM Cloudant**. It's linked to your watsonx Orchestrate sign-in, but your email is never stored. Each user gets a separate, encrypted-key partition, so nobody can see anyone else's data.
+
 
 ---
 
