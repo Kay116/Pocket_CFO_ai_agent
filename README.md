@@ -1,8 +1,8 @@
 <div align="center">
 
-💼 Pocket CFO
+*💼 Pocket CFO
 
-Your personal finance coach
+**Your personal finance coach
 
 Pocket CFO is a team of 7 AI agents on IBM watsonx Orchestrate that work together to build you a personal money plan.
 
